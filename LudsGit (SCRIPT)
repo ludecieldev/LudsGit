@@ -1,0 +1,313 @@
+#!/bin/bash
+
+# Ensure script exits on any error
+set -e
+
+# Define colors for output
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+BOLD_GREEN='\033[1;32m'
+RED='\033[1;91m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to print colored messages
+print_message() {
+    local COLOR=$1
+    local MESSAGE=$2
+    printf "${COLOR}${MESSAGE}${NC}\n"
+}
+
+# Check if correct number of arguments is provided
+if [ "$#" -ne 2 ]; then
+    print_message $RED "Usage: $0 <repository_url> <project_name>"
+    exit 1
+fi
+
+# Assign arguments to variables
+REPO_URL=$1
+PROJECT_NAME=$2
+
+# Check if the project directory already exists
+if [ -d "$PROJECT_NAME" ]; then
+    print_message $RED "Directory $PROJECT_NAME already exists."
+    read -p "Do you want to delete it and recreate it? (Y/N): " choice
+    case "$choice" in 
+      y|Y ) 
+        print_message $YELLOW "Deleting the existing directory $PROJECT_NAME..."
+        rm -rf "$PROJECT_NAME"
+        print_message $GREEN "Directory deleted successfully."
+        ;;
+      n|N ) 
+        print_message $RED "Operation cancelled by user."
+        exit 1
+        ;;
+      * ) 
+        print_message $RED "Invalid choice. Operation cancelled."
+        exit 1
+        ;;
+    esac
+fi
+
+# Clone the repository
+print_message $CYAN "Cloning the repository $REPO_URL into $PROJECT_NAME..."
+git clone $REPO_URL $PROJECT_NAME
+print_message $GREEN "Repository cloned successfully."
+cd $PROJECT_NAME
+
+# Create .github/workflows/deploy.yml
+print_message $CYAN "Creating .github/workflows/deploy.yml..."
+mkdir -p .github/workflows
+cat <<EOL > .github/workflows/deploy.yml
+on:
+    push:
+    pull_request:
+        types: [opened, synchronize, reopened]
+
+env:
+        MIRROR_URL: "COMPLETE HERE"
+        PROJECT_NAME: "$PROJECT_NAME"
+        PUSH_BRANCH: "\${GITHUB_REF}"
+        PUSHER: "\${GITHUB_ACTOR}"
+        REPOSITORY: "\${GITHUB_REPOSITORY}"
+
+jobs:
+    is_repo_a_mirror:
+      runs-on: ubuntu-latest
+      if: \${{ github.repository }} != 'COMPLETE HERE'
+      steps:
+        - name: Check if repo is a mirror
+          run: |
+            if [[ "\${GITHUB_REPOSITORY}" == "\${MIRROR_URL}" ]]; then
+              echo "Error: This repository is a mirror"
+              exit 1
+            else
+              echo "This repository is not a mirror"
+              exit 0
+            fi
+    check_coding_style:
+      runs-on: ubuntu-latest
+      needs: is_repo_a_mirror
+      container:
+          image: "ghcr.io/epitech/coding-style-checker:latest"
+          options: --privileged
+      steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Coding Style
+        run: |
+          check.sh . /tmp
+      - name: Annotation
+        run: |
+          input=/tmp/coding-style-reports.log
+          while IFS= read -r -a line; do
+            fields=\$(printf "%s" "\$line"|cut -d':' --output-delimiter=' ' -f1-)
+            echo "::error title=\${fields[2]} coding style error,file=\${fields[0]},line=\${fields[1]}::\${fields[3]}"
+          done < \$input
+      - name: Result
+        run: |
+          NB_ERROR=\$(cat /tmp/coding-style-reports.log | wc -l)
+          if [ \$NB_ERROR -gt 0 ]; then
+            exit 1
+          fi
+    build:
+        runs-on: ubuntu-latest
+        needs: is_repo_a_mirror
+        container:
+            image: epitechcontent/epitest-docker:latest
+            options: --privileged
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Build
+              run: make
+    deploy:
+      runs-on: ubuntu-latest
+      needs: [build, check_coding_style]
+      if: \${{ github.repository }} != 'COMPLETE HERE'
+      steps:
+        - name: Checkout
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+        - name: Push Epitech
+          uses: pixta-dev/repository-mirroring-action@v1
+          with:
+            target_repo_url: \${{ env.MIRROR_URL }}
+            ssh_private_key: \${{ secrets.SSH_PRIVATE_KEY }}
+    discord_report:
+      runs-on: ubuntu-latest
+      needs: deploy
+      steps:
+        - name: Discord Webhook Action
+          uses: tsickert/discord-webhook@v6.0.0
+          with:
+            webhook-url: \${{ secrets.WEBHOOK_URL }}
+            embed-title: "REPORT LOG - \${{ env.PROJECT_NAME }}"
+            embed-description: "A new report has been generated for **\${{ env.PROJECT_NAME }}** project by Github Actions. The push has been made by **\${{ env.PUSHER }}** on the branch **\${{ env.PUSH_BRANCH }}** on the repository **\${{ env.REPOSITORY }}**."
+            embed-color: "3066993"
+            embed-image-url: "https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png"
+EOL
+print_message $GREEN ".github/workflows/deploy.yml created successfully."
+
+# Create .github/workflows/doxygen.yml
+print_message $CYAN "Creating .github/workflows/doxygen.yml..."
+cat <<EOL > .github/workflows/doxygen.yml
+name: Generate Doxygen Documentation
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DenverCoder1/doxygen-github-pages-action@v1.3.0
+        with:
+          github_token: \${{ secrets.PRIVATE_TOKEN }}
+          branch: gh-pages
+          folder: html
+          config_file: Doxyfile
+EOL
+print_message $GREEN ".github/workflows/doxygen.yml created successfully."
+
+# Create include directory and header file
+print_message $CYAN "Creating include/$PROJECT_NAME.h..."
+mkdir -p include
+cat <<EOL > include/$PROJECT_NAME.h
+/*
+** EPITECH PROJECT, $(date +%Y)
+** $PROJECT_NAME
+** File description:
+** $PROJECT_NAME.h
+*/
+
+#ifndef ${PROJECT_NAME}_H_
+    #define ${PROJECT_NAME}_H_
+#endif /* !${PROJECT_NAME}_H_ */
+EOL
+print_message $GREEN "include/$PROJECT_NAME.h created successfully."
+
+# Create src/main directory and main.c file
+print_message $CYAN "Creating src/main/main.c..."
+mkdir -p src/main
+cat <<EOL > src/main/main.c
+/*
+** EPITECH PROJECT, $(date +%Y)
+** $PROJECT_NAME
+** File description:
+** main.c
+*/
+
+#include "$PROJECT_NAME.h"
+
+int main(void)
+{
+    return 0;
+}
+EOL
+print_message $GREEN "src/main/main.c created successfully."
+
+# Create Makefile
+print_message $CYAN "Creating Makefile..."
+cat <<EOL > Makefile
+##
+## EPITECH PROJECT, $(date +%Y)
+## $PROJECT_NAME
+## File description:
+## Makefile
+##
+
+SRC	=	src/main/main.c
+
+OBJ     =   \$(SRC:.c=.o)
+DEPS    =   \$(OBJ:.o=.d)
+
+NAME    =   $PROJECT_NAME
+
+CFLAGS  +=  -W -Wall -Wextra -MMD -MP -I./include/
+
+CYAN    =   \033[0;36m
+GREEN   =   \033[0;32m
+BOLD_GREEN = \033[1;32m
+RED     =   \033[1;91m
+YELLOW  =   \033[1;33m
+NC      =   \033[0m # No Color
+
+TOTAL_FILES = \$(words \$(SRC))
+
+.SILENT:
+
+all: start_compilation \$(NAME) end_compilation
+
+start_compilation:
+	@printf "\${YELLOW}LUD'S MAKEFILE | \\
+\${CYAN}Started compilation of \${RED}\$(TOTAL_FILES) files\${NC}\n"
+
+\$(NAME): \$(OBJ)
+	@gcc -o \$(NAME) \$(OBJ) \$(CFLAGS) \$(LDFLAGS)
+	@printf "\${YELLOW}LUD'S MAKEFILE | \${BOLD_GREEN}Compilation done!\${NC}\n"
+
+%.o: %.c
+	@printf "\${CYAN}Compiling \$< ...\${NC}\r"
+	@\$(CC) \$(CFLAGS) -c \$< -o \$@
+	@printf "\${GREEN}Compiled \$< \${NC}\n"
+
+end_compilation:
+	@printf "\${YELLOW}LUD'S MAKEFILE | \${BOLD_GREEN}All files compiled successfully!\${NC}\n"
+
+clean:
+	@rm -f \$(OBJ) \$(DEPS)
+	@printf "\${YELLOW}LUD'S MAKEFILE | \${RED}Cleaning object files...\${NC}\n"
+
+fclean: clean
+	@rm -f \$(NAME)
+	@printf "\${YELLOW}LUD'S MAKEFILE | \${RED}Full cleanup complete. Executable removed.${NC}\n"
+
+debug:
+	@gcc -o \$(NAME) \$(SRC) \$(CFLAGS) \$(LDFLAGS) -g3
+	@printf "\${YELLOW}LUD'S MAKEFILE | \${BOLD_GREEN}Compilation done with debug!${NC}\n"
+
+re: fclean all
+
+help:
+	@echo "\${BOLD_GREEN}Available targets:\${NC}"
+	@echo "\${BOLD_GREEN}  all: Builds the project.\${NC}"
+	@echo "\${BOLD_GREEN}  clean: Removes object files and dependency files.\${NC}"
+	@echo "\${BOLD_GREEN}  fclean: Removes object files, dependency files, and the executable.\${NC}"
+	@echo "\${BOLD_GREEN}  re: Rebuilds the project from scratch.\${NC}"
+	@echo "\${BOLD_GREEN}  help: Displays this help.\${NC}"
+	@echo "\${BOLD_GREEN}  clear: Clears the terminal.\${NC}"
+
+.PHONY: all clean fclean re start_compilation end_compilation help
+
+-include \$(DEPS)
+EOL
+print_message $GREEN "Makefile created successfully."
+
+print_message $BOLD_GREEN "Project $PROJECT_NAME has been set up successfully."
+
+# Ask the user if they want to push the changes
+read -p "Do you want to push the changes to the remote repository? (Y/N): " push_choice
+case "$push_choice" in 
+  y|Y ) 
+    print_message $CYAN "Pushing changes to the remote repository..."
+    git add .
+    git commit -m "Initial commit with project structure and configurations"
+    git push
+    print_message $GREEN "Changes pushed successfully."
+    ;;
+  n|N ) 
+    print_message $YELLOW "Changes were not pushed."
+    ;;
+  * ) 
+    print_message $RED "Invalid choice. No changes were pushed."
+    ;;
+esac
