@@ -4,7 +4,7 @@
 
 ## 📖 Short Presentation
 
-**LudsGit** is a project setup tool that automates the creation of a GitHub repository structure, including workflows and Makefile for a C project. It ensures that your project is initialized with the necessary files and configurations to maintain coding standards, build processes, and documentation generation.
+**LudsGit** is a project setup tool that automates the creation of a GitHub repository structure, including workflows and Makefile for a C project (mainly for EPITECH). It ensures that your project is initialized with the necessary files and configurations to maintain coding standards, build processes, and documentation generation.
 
 Feel free to explore the project and contribute to its development. I appreciate your interest and involvement!
 
