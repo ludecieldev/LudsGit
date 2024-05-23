@@ -94,6 +94,12 @@ This workflow generates Doxygen documentation on pushes to the main branch:
 
     Doxygen Documentation: Uses the DenverCoder1/doxygen-github-pages-action to generate and deploy documentation to the gh-pages branch.
 
+## Tips
+
+Don't forget to complete the github actions and your secrets with the needed tokens, SSH key and discord Webhook.
+Feel free to edit if needed
+If you're running on arch, it seems that you'll have to add "-e" on each line of the `make help`.
+
 ## 👥 Contributing
 
 Feel free to fork this repository and submit pull requests to enhance the functionality or fix any issues.

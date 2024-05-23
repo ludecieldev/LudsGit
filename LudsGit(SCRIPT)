@@ -278,13 +278,13 @@ debug:
 re: fclean all
 
 help:
-	@echo "\${BOLD_GREEN}Available targets:\${NC}"
-	@echo "\${BOLD_GREEN}  all: Builds the project.\${NC}"
-	@echo "\${BOLD_GREEN}  clean: Removes object files and dependency files.\${NC}"
-	@echo "\${BOLD_GREEN}  fclean: Removes object files, dependency files, and the executable.\${NC}"
-	@echo "\${BOLD_GREEN}  re: Rebuilds the project from scratch.\${NC}"
-	@echo "\${BOLD_GREEN}  help: Displays this help.\${NC}"
-	@echo "\${BOLD_GREEN}  clear: Clears the terminal.\${NC}"
+	@echo  "\${BOLD_GREEN}Available targets:\${NC}"
+	@echo  "\${BOLD_GREEN}  all: Builds the project.\${NC}"
+	@echo  "\${BOLD_GREEN}  clean: Removes object files and dependency files.\${NC}"
+	@echo  "\${BOLD_GREEN}  fclean: Removes object files, dependency files, and the executable.\${NC}"
+	@echo  "\${BOLD_GREEN}  re: Rebuilds the project from scratch.\${NC}"
+	@echo  "\${BOLD_GREEN}  help: Displays this help.\${NC}"
+	@echo  "\${BOLD_GREEN}  clear: Clears the terminal.\${NC}"
 
 .PHONY: all clean fclean re start_compilation end_compilation help
 
